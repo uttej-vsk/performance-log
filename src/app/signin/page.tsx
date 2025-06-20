@@ -56,6 +56,23 @@ export default function SignInPage() {
     }
   }
 
+  // Prevent hydration mismatch by not rendering until mounted
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="bg-card border border-border p-8 rounded-lg shadow-lg w-full max-w-sm">
+          <div className="animate-pulse">
+            <div className="h-8 bg-muted rounded mb-4"></div>
+            <div className="h-16 bg-muted rounded mb-4"></div>
+            <div className="h-10 bg-muted rounded mb-2"></div>
+            <div className="h-10 bg-muted rounded mb-2"></div>
+            <div className="h-10 bg-muted rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <form
@@ -86,6 +103,7 @@ export default function SignInPage() {
             required
             className="w-full border border-input bg-background text-foreground rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
             autoComplete="email"
+            suppressHydrationWarning
           />
         </div>
         <div>
@@ -103,6 +121,7 @@ export default function SignInPage() {
             required
             className="w-full border border-input bg-background text-foreground rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
             autoComplete="current-password"
+            suppressHydrationWarning
           />
         </div>
         <button
