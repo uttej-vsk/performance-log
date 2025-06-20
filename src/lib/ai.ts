@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { readFile, unlink } from 'fs/promises';
+import { fileToGenerativePart } from '@/lib/utils';
 
 // Initialize Gemini client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
@@ -9,6 +11,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const MessageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
   content: z.string(),
+  filePath: z.string().optional(),
 });
 
 // Conversation schema
@@ -86,34 +89,52 @@ export async function generateStreamingResponse(
 
     const systemPrompt = getSystemPrompt(userProfile ?? undefined);
 
-    // The last message is the new prompt, the rest is history
-    const currentMessage = validatedMessages.pop();
-    if (!currentMessage) {
-      throw new Error("No message provided to generate response for.");
-    }
+    // Convert messages to Gemini format, including image data from file path
+    const contents = await Promise.all(validatedMessages.map(async (msg) => {
+      const parts = [{ text: msg.content }];
+      let tempFilePath: string | undefined = undefined;
 
-    // Convert history messages to Gemini format
-    const history = validatedMessages.map((msg) => ({
-      role: msg.role === "assistant" ? "model" : "user",
-      parts: [{ text: msg.content }],
+      if (msg.filePath) {
+        try {
+          const filePart = await fileToGenerativePart(msg.filePath);
+          parts.push(filePart);
+          tempFilePath = msg.filePath;
+        } catch (error) {
+          console.error(`Failed to process file ${msg.filePath}:`, error);
+          // Don't include the part, but maybe add a note to the content
+          parts[0].text += `\n[System note: Could not process attached file at path ${msg.filePath}]`;
+        }
+      }
+      
+      return {
+        role: msg.role === "assistant" ? "model" : "user",
+        parts,
+        tempFilePath, // Keep track of file to delete it later
+      };
     }));
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-1.5-flash",
       systemInstruction: systemPrompt,
     });
-
-    // Start a chat session with the history
-    const chat = model.startChat({
-      history,
+    
+    // Generate streaming response using the full contents
+    const result = await model.generateContentStream({
+      contents: contents.map(c => ({ role: c.role, parts: c.parts })),
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 1000,
       },
     });
 
-    // Send the latest message and get a streaming response
-    const result = await chat.sendMessageStream(currentMessage.content);
+    // Clean up temporary files after the stream is done
+    const cleanup = () => {
+      contents.forEach(content => {
+        if (content.tempFilePath) {
+          unlink(content.tempFilePath).catch(err => console.error(`Failed to delete temp file: ${content.tempFilePath}`, err));
+        }
+      });
+    };
 
     // Convert to a simple ReadableStream
     return new ReadableStream({
@@ -127,10 +148,15 @@ export async function generateStreamingResponse(
           }
           controller.close();
         } catch (error) {
-          console.error("Streaming error:", error);
+          console.error('Streaming error:', error);
           controller.error(error);
+        } finally {
+          cleanup();
         }
       },
+      cancel() {
+        cleanup();
+      }
     });
   } catch (error) {
     console.error("AI generation error:", error);

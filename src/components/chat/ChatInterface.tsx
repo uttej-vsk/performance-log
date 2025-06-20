@@ -13,6 +13,7 @@ interface Message {
   content: string;
   type: 'user' | 'assistant';
   timestamp?: Date;
+  imageUrl?: string;
 }
 
 export default function ChatInterface() {
@@ -86,41 +87,38 @@ export default function ChatInterface() {
 
   const JIRA_URL_REGEX = /https?:\/\/[a-zA-Z0-9\.-]+\/browse\/[A-Z]+-\d+/;
 
-  const handleSendMessage = async (content: string) => {
-    if (!content.trim() || isLoading) return;
+  const handleSendMessage = async (content: string, file?: File) => {
+    if ((!content.trim() && !file) || isLoading) return;
 
-    let messageContent = content;
-    const jiraMatch = content.match(JIRA_URL_REGEX);
-
-    if (jiraMatch) {
-      const url = jiraMatch[0];
+    let tempFilePath: string | undefined = undefined;
+    if (file) {
       try {
-        const response = await fetch('/api/jira/fetch-details', {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await fetch('/api/chat/image-upload', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url }),
+          body: formData,
         });
         const result = await response.json();
         if (result.success) {
-          messageContent = `I worked on the following Jira ticket:
-**Title:** ${result.data.title}
-**Description:**
-${result.data.description}
-
-(Source: ${url})
-          
-My notes: ${content.replace(url, '').trim()}`;
+          tempFilePath = result.filePath;
+        } else {
+          throw new Error(result.error || 'File upload failed');
         }
       } catch (error) {
-        console.error("Failed to fetch Jira details, sending original message.", error);
+        console.error('File upload error:', error);
+        // Handle error (e.g., show a toast to the user)
+        return;
       }
     }
 
     const userMessage: Message = { 
       id: Date.now().toString(), 
-      content: messageContent, 
+      content, 
       type: 'user',
-      timestamp: new Date()
+      timestamp: new Date(),
+      // We'll use the local file preview for the UI, not the server path
+      imageUrl: file ? URL.createObjectURL(file) : undefined,
     };
     
     const newMessages = [...messages, userMessage];
@@ -135,6 +133,8 @@ My notes: ${content.replace(url, '').trim()}`;
       const messagesForAI = newMessages.map(msg => ({
         role: msg.type as 'user' | 'assistant',
         content: msg.content,
+        // We only need to send the temp path for the latest user message
+        filePath: msg.id === userMessage.id ? tempFilePath : undefined,
       }));
 
       const response = await fetch('/api/chat/stream', {

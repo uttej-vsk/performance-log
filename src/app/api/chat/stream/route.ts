@@ -9,6 +9,7 @@ const StreamRequestSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string(),
+    filePath: z.string().optional(),
   })),
   conversationId: z.string().optional().nullable(),
 })
@@ -34,6 +35,7 @@ export async function POST(request: NextRequest) {
     const aiMessages: Message[] = messages.map(msg => ({
       role: msg.role,
       content: msg.content,
+      filePath: msg.filePath,
     }))
 
     // Generate streaming response
