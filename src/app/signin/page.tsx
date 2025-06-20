@@ -57,6 +57,13 @@ export default function SignInPage() {
         className="bg-card border border-border p-8 rounded-lg shadow-lg w-full max-w-sm space-y-4"
       >
         <h1 className="text-2xl font-bold mb-2 text-foreground">Sign In</h1>
+        <div className="text-xs text-muted-foreground mb-4 p-2 bg-muted rounded">
+          Test credentials:
+          <br />
+          Email: test@example.com
+          <br />
+          Password: password123
+        </div>
         {error && <div className="text-destructive text-sm">{error}</div>}
         <div>
           <label
