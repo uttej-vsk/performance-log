@@ -1,7 +1,7 @@
 "use client"
 
 import { usePathname } from 'next/navigation'
-import { Sidebar } from '@/components/layout/Sidebar'
+import Sidebar from '@/components/layout/Sidebar'
 import { ReactNode } from 'react'
 
 export default function AppLayout({ children }: { children: ReactNode }) {

@@ -61,6 +61,11 @@ model User {
   weeklyGoal    Int       @default(5)
   password      String?   // For credentials provider
 
+  // New fields for user profile
+  jobTitle      String?
+  jobDescription String?
+  reviewDate    DateTime?
+
   accounts          Account[]
   sessions          Session[]
   workEntries       WorkEntry[]

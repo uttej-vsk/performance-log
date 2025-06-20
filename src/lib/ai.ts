@@ -94,17 +94,16 @@ export async function generateStreamingResponse(
       },
     })
 
-    // Convert to ReadableStream for SSE
+    // Convert to a simple ReadableStream
     return new ReadableStream({
       async start(controller) {
         try {
           for await (const chunk of result.stream) {
             const text = chunk.text()
             if (text) {
-              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ content: text })}\n\n`))
+              controller.enqueue(new TextEncoder().encode(text));
             }
           }
-          controller.enqueue(new TextEncoder().encode(`data: [DONE]\n\n`))
           controller.close()
         } catch (error) {
           console.error('Streaming error:', error)
@@ -124,26 +123,40 @@ export async function generateStreamingResponse(
 export async function analyzeWorkEntry(content: string) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const prompt = `Analyze the following work entry and extract structured information. Return a JSON object with:
+    const prompt = `Analyze the following work entry and extract structured information. Return ONLY a valid JSON object with the following schema:
     {
-      "title": "Brief title",
-      "businessImpact": "Description of business impact",
-      "technicalComplexity": 1-5,
-      "suggestedTags": ["tag1", "tag2"],
-      "missingInformation": ["What metrics are missing", "What context is needed"],
-      "impactScore": 1-10,
-      "suggestedQuestions": ["Follow-up question 1", "Follow-up question 2"]
+      "title": "Brief title of the work item",
+      "businessImpact": "Detailed description of the business impact and value created",
+      "technicalComplexity": "A number from 1 (low) to 5 (high) representing the technical difficulty",
+      "suggestedTags": ["relevant", "keywords"],
+      "missingInformation": ["What metrics are missing?", "What context is needed?"],
+      "impactScore": "A number from 1 (low) to 10 (high) representing the overall impact",
+      "suggestedQuestions": ["A follow-up question to clarify impact", "Another question about challenges"]
     }
 
-    Work entry: ${content}`
+    Work entry to analyze:
+    ---
+    ${content}
+    ---
+    
+    Remember, your response must be ONLY the JSON object, with no other text or markdown formatting.`;
 
     const result = await model.generateContent(prompt)
     const response = await result.response
-    const analysis = response.text()
+    const analysisText = response.text()
 
-    if (!analysis) throw new Error('No analysis generated')
+    if (!analysisText) throw new Error('No analysis generated from AI')
 
-    return JSON.parse(analysis)
+    // Clean the analysis text by extracting the JSON object
+    const startIndex = analysisText.indexOf('{');
+    const endIndex = analysisText.lastIndexOf('}');
+    if (startIndex === -1 || endIndex === -1) {
+      console.error("Invalid AI Response:", analysisText);
+      throw new Error('Could not find JSON object in AI response');
+    }
+    const jsonString = analysisText.substring(startIndex, endIndex + 1);
+    
+    return JSON.parse(jsonString);
   } catch (error) {
     console.error('Work entry analysis error:', error)
     throw new Error('Failed to analyze work entry')
