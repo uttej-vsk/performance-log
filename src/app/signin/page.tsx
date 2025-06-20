@@ -5,18 +5,14 @@ import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function SignInPage() {
-  const [email, setEmail] = useState("test@example.com");
-  const [password, setPassword] = useState("password123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    console.log("Form submitted with:", {
-      email,
-      password: password ? "[HIDDEN]" : "[EMPTY]",
-    });
 
     if (!email || !password) {
       setError("Please enter both email and password.");
@@ -27,7 +23,6 @@ export default function SignInPage() {
     setError("");
 
     try {
-      console.log("Calling signIn...");
       const res = await signIn("credentials", {
         email,
         password,
@@ -35,30 +30,21 @@ export default function SignInPage() {
         callbackUrl: "/dashboard",
       });
 
-      console.log("SignIn response:", res);
-
       setLoading(false);
       if (res?.error) {
-        console.error("SignIn error:", res.error);
         setError("Invalid email or password.");
       } else if (res?.ok) {
-        console.log("SignIn successful, checking session...");
         // Double-check session was created
         const session = await getSession();
-        console.log("Session after signin:", session);
         if (session?.user) {
-          console.log("Session confirmed, redirecting...");
           router.push("/dashboard");
         } else {
-          console.error("No session found after successful signin");
           setError("Authentication failed. Please try again.");
         }
       } else {
-        console.error("Unexpected signIn response:", res);
         setError("An unexpected error occurred. Please try again.");
       }
     } catch (error) {
-      console.error("SignIn exception:", error);
       setLoading(false);
       setError("An error occurred during sign in. Please try again.");
     }
