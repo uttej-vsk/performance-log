@@ -42,8 +42,17 @@ export default function SignInPage() {
         console.error("SignIn error:", res.error);
         setError("Invalid email or password.");
       } else if (res?.ok) {
-        console.log("SignIn successful, redirecting...");
-        router.push("/dashboard");
+        console.log("SignIn successful, checking session...");
+        // Double-check session was created
+        const session = await getSession();
+        console.log("Session after signin:", session);
+        if (session?.user) {
+          console.log("Session confirmed, redirecting...");
+          router.push("/dashboard");
+        } else {
+          console.error("No session found after successful signin");
+          setError("Authentication failed. Please try again.");
+        }
       } else {
         console.error("Unexpected signIn response:", res);
         setError("An unexpected error occurred. Please try again.");
