@@ -13,19 +13,45 @@ export default function SignInPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    console.log("Form submitted with:", {
+      email,
+      password: password ? "[HIDDEN]" : "[EMPTY]",
+    });
+
+    if (!email || !password) {
+      setError("Please enter both email and password.");
+      return;
+    }
+
     setLoading(true);
     setError("");
-    const res = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-      callbackUrl: "/dashboard",
-    });
-    setLoading(false);
-    if (res?.error) {
-      setError("Invalid email or password.");
-    } else if (res?.ok) {
-      router.push("/dashboard");
+
+    try {
+      console.log("Calling signIn...");
+      const res = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+        callbackUrl: "/dashboard",
+      });
+
+      console.log("SignIn response:", res);
+
+      setLoading(false);
+      if (res?.error) {
+        console.error("SignIn error:", res.error);
+        setError("Invalid email or password.");
+      } else if (res?.ok) {
+        console.log("SignIn successful, redirecting...");
+        router.push("/dashboard");
+      } else {
+        console.error("Unexpected signIn response:", res);
+        setError("An unexpected error occurred. Please try again.");
+      }
+    } catch (error) {
+      console.error("SignIn exception:", error);
+      setLoading(false);
+      setError("An error occurred during sign in. Please try again.");
     }
   }
 
