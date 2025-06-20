@@ -37,7 +37,11 @@ export async function POST(request: NextRequest) {
     }))
 
     // Generate streaming response
-    const stream = await generateStreamingResponse(aiMessages, conversationId || undefined)
+    const stream = await generateStreamingResponse(
+      aiMessages,
+      session.user.id,
+      conversationId || undefined,
+    )
 
     // Return streaming response
     return new Response(stream, {

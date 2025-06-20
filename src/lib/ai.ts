@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
+import { prisma } from "@/lib/db";
 
 // Initialize Gemini client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
@@ -25,7 +26,7 @@ export type Message = z.infer<typeof MessageSchema>;
 export type Conversation = z.infer<typeof ConversationSchema>;
 
 // System prompt for the performance tracking AI
-const getSystemPrompt = () => {
+const getSystemPrompt = (userProfile?: { jobTitle?: string | null; jobDescription?: string | null; projects?: string | null; }) => {
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -33,29 +34,34 @@ const getSystemPrompt = () => {
     day: "numeric",
   });
 
-  return `You are a friendly, helpful AI assistant that helps employees document and analyze their work contributions for performance reviews. Today is ${today}.
+  let profileContext = "You are a friendly, helpful AI assistant that helps employees document and analyze their work contributions for performance reviews."
+
+  if (userProfile) {
+    profileContext = `You are a friendly, helpful AI assistant for a user with the following profile:
+- **Job Title:** ${userProfile.jobTitle || 'Not specified'}
+- **Responsibilities:** ${userProfile.jobDescription || 'Not specified'}
+- **Main Projects:** ${userProfile.projects || 'Not specified'}
+
+Your main goal is to help them document and analyze their work contributions for their performance review.`
+  }
+
+  return `${profileContext} Today is ${today}.
 
 Your role is to:
-1. Act like a supportive colleague who genuinely cares about their professional growth
-2. Ask thoughtful follow-up questions to extract business impact and context
-3. Help users articulate the value and significance of their work
-4. Categorize work automatically and suggest improvements
-5. Maintain a conversational, encouraging tone
+1.  Act like a supportive colleague who genuinely cares about their professional growth.
+2.  Ask thoughtful, targeted follow-up questions to extract business impact and context, using their profile to guide your questions.
+3.  Help users articulate the value and significance of their work.
+4.  Reference the conversation history to avoid repeating questions.
+5.  After 2-4 probing questions, shift to synthesizing the information. Propose a summary of the work entry (title, description, impact) and ask for confirmation before saving. This prevents endless conversation loops.
+6.  Maintain a conversational, encouraging tone.
 
 Key guidelines:
-- Ask specific questions about metrics, stakeholders, and business impact
-- Help users think through the broader implications of their work
-- Suggest ways to quantify achievements when possible
-- Be encouraging and supportive while being thorough
-- Keep responses concise but insightful
-
-Example conversation flow:
-User: "I fixed a bug in the authentication system"
-You: "That's great work! Let me ask a few questions to capture the full impact:
-- How many users were affected by this bug?
-- What happened when users couldn't authenticate?
-- Was this blocking any business processes?
-- Do you have any metrics on the impact?"
+- Ask specific questions about metrics, stakeholders, and business impact.
+- If a user provides a link (e.g., to a Jira ticket), and you don't have the content, politely ask them to summarize the key details instead of saying you can't access it.
+- Help users think through the broader implications of their work.
+- Suggest ways to quantify achievements when possible.
+- Be encouraging and supportive while being thorough.
+- Keep responses concise but insightful.
 
 Remember: You're helping users tell their professional story better. Every interaction should feel natural and valuable.`;
 };
@@ -65,20 +71,30 @@ Remember: You're helping users tell their professional story better. Every inter
  */
 export async function generateStreamingResponse(
   messages: Message[],
+  userId: string,
   conversationId?: string,
 ): Promise<ReadableStream<Uint8Array>> {
   try {
+    // Fetch user profile
+    const userProfile = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { jobTitle: true, jobDescription: true, projects: true },
+    });
+
     // Validate input
     const validatedMessages = messages.map((msg) => MessageSchema.parse(msg));
 
-    const systemPrompt = getSystemPrompt();
+    const systemPrompt = getSystemPrompt(userProfile ?? undefined);
 
-    // Filter out any system messages from our history, just in case.
-    const history = validatedMessages.filter((m) => m.role !== "system");
+    // The last message is the new prompt, the rest is history
+    const currentMessage = validatedMessages.pop();
+    if (!currentMessage) {
+      throw new Error("No message provided to generate response for.");
+    }
 
-    // Convert messages to Gemini format
-    const geminiMessages = history.map((msg) => ({
-      role: msg.role === "assistant" ? "model" : "user", // Convert 'assistant' to 'model'
+    // Convert history messages to Gemini format
+    const history = validatedMessages.map((msg) => ({
+      role: msg.role === "assistant" ? "model" : "user",
       parts: [{ text: msg.content }],
     }));
 
@@ -87,14 +103,17 @@ export async function generateStreamingResponse(
       systemInstruction: systemPrompt,
     });
 
-    // Generate streaming response
-    const result = await model.generateContentStream({
-      contents: geminiMessages,
+    // Start a chat session with the history
+    const chat = model.startChat({
+      history,
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 1000,
       },
     });
+
+    // Send the latest message and get a streaming response
+    const result = await chat.sendMessageStream(currentMessage.content);
 
     // Convert to a simple ReadableStream
     return new ReadableStream({

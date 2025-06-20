@@ -6,7 +6,7 @@ import { z } from 'zod'
 
 // Schema for creating a message
 const CreateMessageSchema = z.object({
-  content: z.string().min(1).max(5000),
+  content: z.string().min(1).max(20000),
   type: z.enum(['user', 'assistant']),
   conversationId: z.string().optional().nullable(),
 })

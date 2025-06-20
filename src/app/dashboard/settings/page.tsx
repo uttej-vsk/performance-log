@@ -12,6 +12,7 @@ export default async function SettingsPage() {
       email: true,
       jobTitle: true,
       jobDescription: true,
+      projects: true,
       reviewDate: true,
     }
   });

@@ -1,4 +1,5 @@
 import { MessageSquare } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 
 interface Message {
   id: string;
@@ -20,13 +21,13 @@ export default function MessageList({ messages }: MessageListProps) {
           className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
         >
           <div
-            className={`max-w-xl px-4 py-2 rounded-lg ${
+            className={`prose prose-invert max-w-xl px-4 py-2 rounded-lg ${
               msg.type === 'user'
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-700 text-gray-200'
             }`}
           >
-            <p className="whitespace-pre-wrap">{msg.content}</p>
+            <ReactMarkdown>{msg.content}</ReactMarkdown>
           </div>
         </div>
       ))}

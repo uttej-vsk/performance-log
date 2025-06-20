@@ -27,6 +27,7 @@ const profileFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters.").max(50, "Name must be at most 50 characters."),
   jobTitle: z.string().max(100, "Job title must be at most 100 characters.").optional().or(z.literal('')),
   jobDescription: z.string().max(2000, "Job description must be at most 2000 characters.").optional().or(z.literal('')),
+  projects: z.string().max(2000, "Projects must be at most 2000 characters.").optional().or(z.literal('')),
   reviewDate: z.date().optional(),
 });
 
@@ -37,6 +38,7 @@ interface SettingsFormProps {
     name: string | null;
     jobTitle: string | null;
     jobDescription: string | null;
+    projects: string | null;
     reviewDate: Date | null;
   };
 }
@@ -52,6 +54,7 @@ export function SettingsForm({ userProfile }: SettingsFormProps) {
       name: userProfile.name || "",
       jobTitle: userProfile.jobTitle || "",
       jobDescription: userProfile.jobDescription || "",
+      projects: userProfile.projects || "",
       reviewDate: userProfile.reviewDate || undefined,
     },
     mode: "onChange",
@@ -124,6 +127,24 @@ export function SettingsForm({ userProfile }: SettingsFormProps) {
                 />
               </FormControl>
               <FormDescription>This provides context to the AI for more accurate assistance.</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="projects"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Main Projects</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="List your main projects, one per line. This helps the AI understand your work's context."
+                  className="resize-none"
+                  {...field}
+                />
+              </FormControl>
+              <FormDescription>Provide a list of your key projects or areas of focus.</FormDescription>
               <FormMessage />
             </FormItem>
           )}

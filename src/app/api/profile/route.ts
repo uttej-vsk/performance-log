@@ -1,40 +1,68 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { z } from 'zod';
-import { prisma } from '@/lib/db';
 import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import { z } from 'zod';
 
-const updateProfileSchema = z.object({
-  name: z.string().min(2).max(50),
-  jobTitle: z.string().max(100).optional(),
-  jobDescription: z.string().max(2000).optional(),
-  reviewDate: z.date().optional(),
+const UpdateProfileSchema = z.object({
+  name: z.string().optional(),
+  jobTitle: z.string().optional(),
+  jobDescription: z.string().optional(),
+  projects: z.string().optional(), // Storing as a JSON string
 });
 
 export async function PUT(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
-    const parsedData = updateProfileSchema.parse({
-      ...body,
-      reviewDate: body.reviewDate ? new Date(body.reviewDate) : undefined,
-    });
+    const validatedData = UpdateProfileSchema.parse(body);
 
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
-      data: parsedData,
+      data: {
+        ...validatedData,
+      },
     });
 
-    return NextResponse.json({ success: true, data: { message: 'Profile updated successfully.' } });
+    return Response.json({ success: true, data: updatedUser });
   } catch (error) {
-    console.error('Error updating profile:', error);
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ success: false, error: error.errors }, { status: 400 });
+      return Response.json({ error: 'Invalid data', details: error.errors }, { status: 400 });
     }
-    return NextResponse.json({ success: false, error: 'An unexpected error occurred.' }, { status: 500 });
+    console.error('Failed to update profile:', error);
+    return Response.json({ error: 'Failed to update profile' }, { status: 500 });
+  }
+}
+
+export async function GET() {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        name: true,
+        email: true,
+        jobTitle: true,
+        jobDescription: true,
+        projects: true,
+      },
+    });
+
+    if (!user) {
+      return Response.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    return Response.json({ success: true, data: user });
+  } catch (error) {
+    console.error('Failed to fetch profile:', error);
+    return Response.json({ error: 'Failed to fetch profile' }, { status: 500 });
   }
 } 

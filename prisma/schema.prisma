@@ -64,6 +64,7 @@ model User {
   // New fields for user profile
   jobTitle      String?
   jobDescription String?
+  projects      String?   // JSON array of project names/descriptions
   reviewDate    DateTime?
 
   accounts          Account[]

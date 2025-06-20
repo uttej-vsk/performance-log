@@ -84,12 +84,41 @@ export default function ChatInterface() {
     return false;
   };
 
+  const JIRA_URL_REGEX = /https?:\/\/[a-zA-Z0-9\.-]+\/browse\/[A-Z]+-\d+/;
+
   const handleSendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return;
 
+    let messageContent = content;
+    const jiraMatch = content.match(JIRA_URL_REGEX);
+
+    if (jiraMatch) {
+      const url = jiraMatch[0];
+      try {
+        const response = await fetch('/api/jira/fetch-details', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        const result = await response.json();
+        if (result.success) {
+          messageContent = `I worked on the following Jira ticket:
+**Title:** ${result.data.title}
+**Description:**
+${result.data.description}
+
+(Source: ${url})
+          
+My notes: ${content.replace(url, '').trim()}`;
+        }
+      } catch (error) {
+        console.error("Failed to fetch Jira details, sending original message.", error);
+      }
+    }
+
     const userMessage: Message = { 
       id: Date.now().toString(), 
-      content, 
+      content: messageContent, 
       type: 'user',
       timestamp: new Date()
     };
