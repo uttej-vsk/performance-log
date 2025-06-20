@@ -74,7 +74,10 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
+    <div
+      className="min-h-screen flex items-center justify-center bg-background"
+      suppressHydrationWarning
+    >
       <form
         onSubmit={handleSubmit}
         className="bg-card border border-border p-8 rounded-lg shadow-lg w-full max-w-sm space-y-4"
