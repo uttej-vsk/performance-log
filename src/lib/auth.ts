@@ -2,10 +2,11 @@ import { prisma } from "@/lib/db";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from 'bcryptjs';
+import bcrypt from "bcryptjs";
 
 export const authOptions: AuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  // Don't use adapter with JWT strategy and Credentials provider
+  // adapter: PrismaAdapter(prisma),
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -28,13 +29,13 @@ export const authOptions: AuthOptions = {
 
         const isPasswordValid = await bcrypt.compare(
           credentials.password,
-          user.password
+          user.password,
         );
 
         if (!isPasswordValid) {
           return null;
         }
-        
+
         return {
           id: user.id,
           email: user.email,
