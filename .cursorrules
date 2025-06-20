@@ -1,0 +1,200 @@
+# Performance Tracker Web App - Cursor Rules
+
+## Project Overview
+You are building a conversational AI-powered performance tracking web app that helps employees document, analyze, and present their work contributions for performance reviews. The AI acts like a "friendly roommate" who probes for business impact, context, and value.
+
+## Technology Stack
+- Frontend: Next.js (latest App Router), TypeScript (latest), Tailwind CSS (latest), shadcn/ui (latest)
+- Backend: Next.js API routes (latest), Prisma ORM (latest), PostgreSQL (latest)
+- AI: OpenAI API (latest) with LangChain (latest)
+- Auth: NextAuth.js (latest) with JWT
+- Deployment: Vercel (latest)
+- Real-time: Server-Sent Events (SSE)
+
+## Code Style & Standards
+- Use TypeScript strictly - no `any` types
+- Functional components with hooks only
+- Server components by default, client components when needed
+- Use Zod for runtime validation
+- Follow Next.js 14 App Router conventions
+- Use kebab-case for file/folder names
+- Use PascalCase for components
+- Use camelCase for functions and variables
+
+## File Structure
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── (auth)/            # Auth route group
+│   ├── api/               # API routes
+│   ├── chat/              # Chat interface
+│   ├── dashboard/         # Main dashboard
+│   └── review/            # Review generation
+├── components/            # Reusable UI components
+│   ├── ui/               # shadcn/ui components
+│   ├── chat/             # Chat-specific components
+│   └── forms/            # Form components
+├── lib/                  # Utilities and configurations
+│   ├── auth.ts           # NextAuth config
+│   ├── db.ts             # Prisma client
+│   ├── ai.ts             # AI/LLM integration
+│   └── utils.ts          # General utilities
+├── types/                # TypeScript type definitions
+└── prisma/               # Database schema and migrations
+```
+
+## Development Guidelines
+
+### Components
+- Create reusable components in `components/` directory
+- Use shadcn/ui for base UI components
+- Props should be strictly typed with interfaces
+- Export components as default exports
+- Use forwardRef for components that need ref forwarding
+
+### API Routes
+- Use Next.js 13+ API route handlers (GET, POST, etc.)
+- Always validate input with Zod schemas
+- Return consistent response format: `{ success: boolean, data?: any, error?: string }`
+- Handle errors gracefully with proper status codes
+- Use middleware for auth protection
+
+### Database
+- Use Prisma schema-first approach
+- All models should have `id`, `createdAt`, `updatedAt`
+- Use proper relations and foreign keys
+- Add indexes for frequently queried fields
+- Use transactions for multi-table operations
+
+### AI Integration
+- Create reusable AI service functions in `lib/ai.ts`
+- Use proper prompt engineering with system/user messages
+- Implement streaming responses for better UX
+- Add retry logic for API failures
+- Log AI interactions for debugging
+
+### State Management
+- Use React hooks (useState, useEffect, useContext) for local state
+- Use React Query for server state
+- Create custom hooks for complex logic
+- Avoid prop drilling - use context when needed
+
+### Error Handling
+- Use error boundaries for React error handling
+- Implement proper error logging
+- Show user-friendly error messages
+- Add loading states for async operations
+
+### Security
+- Validate all inputs server-side
+- Use CSRF protection
+- Implement rate limiting for AI endpoints
+- Sanitize user content before storage
+- Use environment variables for secrets
+
+## AI Conversation Guidelines
+- Maintain conversation context throughout the session
+- Ask follow-up questions to extract business impact
+- Categorize work entries automatically
+- Store structured data from unstructured conversations
+- Generate professional summaries from casual input
+
+## Performance Optimization
+- Use Next.js Image component for images
+- Implement proper caching strategies
+- Use React.memo for expensive components
+- Lazy load non-critical components
+- Optimize database queries with proper indexing
+
+## Testing
+- Write unit tests for utility functions
+- Test API endpoints with proper mocking
+- Test AI integration with mock responses
+- Use React Testing Library for component tests
+
+## Environment Variables
+```
+DATABASE_URL=
+NEXTAUTH_SECRET=
+NEXTAUTH_URL=
+OPENAI_API_KEY=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+```
+
+## Common Patterns
+
+### API Route Example
+```typescript
+import { NextRequest } from 'next/server'
+import { z } from 'zod'
+import { getServerSession } from 'next-auth'
+
+const schema = z.object({
+  message: z.string().min(1).max(1000)
+})
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession()
+    if (!session) {
+      return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { message } = schema.parse(body)
+
+    // Process the request
+    const data = await processMessage(message)
+
+    return Response.json({ success: true, data })
+  } catch (error) {
+    return Response.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    }, { status: 500 })
+  }
+}
+```
+
+### Component Example
+```typescript
+interface ChatMessageProps {
+  message: string
+  isUser: boolean
+  timestamp: Date
+}
+
+export default function ChatMessage({ message, isUser, timestamp }: ChatMessageProps) {
+  return (
+    <div className={cn(
+      "flex w-full",
+      isUser ? "justify-end" : "justify-start"
+    )}>
+      <div className={cn(
+        "max-w-xs lg:max-w-md px-4 py-2 rounded-lg",
+        isUser ? "bg-primary text-primary-foreground" : "bg-muted"
+      )}>
+        <p>{message}</p>
+        <span className="text-xs opacity-70">
+          {format(timestamp, 'HH:mm')}
+        </span>
+      </div>
+    </div>
+  )
+}
+```
+
+## Key Features to Implement
+1. Real-time chat interface with AI
+2. Work entry logging and categorization
+3. Timeline view of all contributions
+4. Performance review generation
+5. User authentication and authorization
+6. Data export capabilities
+
+## Remember
+- Focus on user experience - the AI should feel conversational and helpful
+- Security is paramount - this app handles sensitive work data
+- Performance matters - responses should be fast and smooth
+- The goal is to help users articulate their value and impact effectively
