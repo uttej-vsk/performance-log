@@ -16,7 +16,7 @@ export default async function DashboardPage() {
           Start a New Chat
         </Link>
         <Link 
-          href="/dashboard/timeline" 
+          href="/timeline" 
           className="bg-gray-700 text-white py-3 px-6 rounded-lg hover:bg-gray-600 transition font-semibold"
         >
           View Work Timeline
