@@ -1,34 +1,36 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
-import { z } from 'zod'
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { z } from "zod";
 
 // Initialize Gemini client
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 // Message schema for validation
 const MessageSchema = z.object({
-  role: z.enum(['user', 'assistant', 'system']),
+  role: z.enum(["user", "assistant", "system"]),
   content: z.string(),
-})
+});
 
 // Conversation schema
 const ConversationSchema = z.object({
   messages: z.array(MessageSchema),
-  context: z.object({
-    workEntries: z.array(z.string()).optional(),
-    userPreferences: z.record(z.any()).optional(),
-  }).optional(),
-})
+  context: z
+    .object({
+      workEntries: z.array(z.string()).optional(),
+      userPreferences: z.record(z.any()).optional(),
+    })
+    .optional(),
+});
 
-export type Message = z.infer<typeof MessageSchema>
-export type Conversation = z.infer<typeof ConversationSchema>
+export type Message = z.infer<typeof MessageSchema>;
+export type Conversation = z.infer<typeof ConversationSchema>;
 
 // System prompt for the performance tracking AI
 const getSystemPrompt = () => {
-  const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
+  const today = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   });
 
   return `You are a friendly, helpful AI assistant that helps employees document and analyze their work contributions for performance reviews. Today is ${today}.
@@ -55,34 +57,34 @@ You: "That's great work! Let me ask a few questions to capture the full impact:
 - Was this blocking any business processes?
 - Do you have any metrics on the impact?"
 
-Remember: You're helping users tell their professional story better. Every interaction should feel natural and valuable.`
-}
+Remember: You're helping users tell their professional story better. Every interaction should feel natural and valuable.`;
+};
 
 /**
  * Generate a streaming response from Gemini
  */
 export async function generateStreamingResponse(
   messages: Message[],
-  conversationId?: string
+  conversationId?: string,
 ): Promise<ReadableStream<Uint8Array>> {
   try {
     // Validate input
-    const validatedMessages = messages.map(msg => MessageSchema.parse(msg))
-    
+    const validatedMessages = messages.map((msg) => MessageSchema.parse(msg));
+
     const systemPrompt = getSystemPrompt();
 
     // Filter out any system messages from our history, just in case.
-    const history = validatedMessages.filter(m => m.role !== 'system');
+    const history = validatedMessages.filter((m) => m.role !== "system");
 
     // Convert messages to Gemini format
-    const geminiMessages = history.map(msg => ({
-      role: msg.role === 'assistant' ? 'model' : 'user', // Convert 'assistant' to 'model'
-      parts: [{ text: msg.content }]
-    }))
+    const geminiMessages = history.map((msg) => ({
+      role: msg.role === "assistant" ? "model" : "user", // Convert 'assistant' to 'model'
+      parts: [{ text: msg.content }],
+    }));
 
-    const model = genAI.getGenerativeModel({ 
-        model: "gemini-2.5-flash",
-        systemInstruction: systemPrompt,
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      systemInstruction: systemPrompt,
     });
 
     // Generate streaming response
@@ -92,28 +94,28 @@ export async function generateStreamingResponse(
         temperature: 0.7,
         maxOutputTokens: 1000,
       },
-    })
+    });
 
     // Convert to a simple ReadableStream
     return new ReadableStream({
       async start(controller) {
         try {
           for await (const chunk of result.stream) {
-            const text = chunk.text()
+            const text = chunk.text();
             if (text) {
               controller.enqueue(new TextEncoder().encode(text));
             }
           }
-          controller.close()
+          controller.close();
         } catch (error) {
-          console.error('Streaming error:', error)
-          controller.error(error)
+          console.error("Streaming error:", error);
+          controller.error(error);
         }
       },
-    })
+    });
   } catch (error) {
-    console.error('AI generation error:', error)
-    throw new Error('Failed to generate AI response')
+    console.error("AI generation error:", error);
+    throw new Error("Failed to generate AI response");
   }
 }
 
@@ -139,35 +141,38 @@ export async function analyzeWorkEntry(content: string) {
     ---
     ${content}
     ---
-    
+
     Remember, your response must be ONLY the JSON object, with no other text or markdown formatting.`;
 
-    const result = await model.generateContent(prompt)
-    const response = await result.response
-    const analysisText = response.text()
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const analysisText = response.text();
 
-    if (!analysisText) throw new Error('No analysis generated from AI')
+    if (!analysisText) throw new Error("No analysis generated from AI");
 
     // Clean the analysis text by extracting the JSON object
-    const startIndex = analysisText.indexOf('{');
-    const endIndex = analysisText.lastIndexOf('}');
+    const startIndex = analysisText.indexOf("{");
+    const endIndex = analysisText.lastIndexOf("}");
     if (startIndex === -1 || endIndex === -1) {
       console.error("Invalid AI Response:", analysisText);
-      throw new Error('Could not find JSON object in AI response');
+      throw new Error("Could not find JSON object in AI response");
     }
     const jsonString = analysisText.substring(startIndex, endIndex + 1);
-    
+
     return JSON.parse(jsonString);
   } catch (error) {
-    console.error('Work entry analysis error:', error)
-    throw new Error('Failed to analyze work entry')
+    console.error("Work entry analysis error:", error);
+    throw new Error("Failed to analyze work entry");
   }
 }
 
 /**
  * Generate follow-up questions based on work entry
  */
-export async function generateFollowUpQuestions(workEntry: string, previousQuestions: string[] = []) {
+export async function generateFollowUpQuestions(
+  workEntry: string,
+  previousQuestions: string[] = [],
+) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const prompt = `Generate 3-5 thoughtful follow-up questions to help extract more business impact and context from this work entry. Focus on:
@@ -176,28 +181,30 @@ export async function generateFollowUpQuestions(workEntry: string, previousQuest
     - Business value
     - Technical complexity
     - Future implications
-    
-    Avoid questions that have already been asked: ${previousQuestions.join(', ')}
-    
+
+    Avoid questions that have already been asked: ${previousQuestions.join(", ")}
+
     Work entry: ${workEntry}
-    
-    Return only the questions, one per line.`
 
-    const result = await model.generateContent(prompt)
-    const response = await result.response
-    const questions = response.text()
+    Return only the questions, one per line.`;
 
-    if (!questions) throw new Error('No questions generated')
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const questions = response.text();
+
+    if (!questions) throw new Error("No questions generated");
 
     // Parse questions (assuming they're numbered or bulleted)
     return questions
-      .split('\n')
+      .split("\n")
       .filter((line: string) => line.trim().length > 0)
-      .map((line: string) => line.replace(/^\d+\.\s*/, '').replace(/^[-*]\s*/, ''))
-      .slice(0, 5)
+      .map((line: string) =>
+        line.replace(/^\d+\.\s*/, "").replace(/^[-*]\s*/, ""),
+      )
+      .slice(0, 5);
   } catch (error) {
-    console.error('Question generation error:', error)
-    throw new Error('Failed to generate follow-up questions')
+    console.error("Question generation error:", error);
+    throw new Error("Failed to generate follow-up questions");
   }
 }
 
@@ -213,21 +220,80 @@ export async function scoreBusinessImpact(content: string): Promise<number> {
     5-6: Medium features, process improvements
     7-8: Major features, significant business impact
     9-10: Critical fixes, major business value, leadership initiatives
-    
+
     Work entry: ${content}
-    
-    Return only the number.`
 
-    const result = await model.generateContent(prompt)
-    const response = await result.response
-    const score = response.text()
+    Return only the number.`;
 
-    if (!score) throw new Error('No score generated')
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const score = response.text();
 
-    const numericScore = parseInt(score.trim())
-    return Math.max(1, Math.min(10, numericScore)) // Clamp between 1-10
+    if (!score) throw new Error("No score generated");
+
+    const numericScore = parseInt(score.trim());
+    return Math.max(1, Math.min(10, numericScore)); // Clamp between 1-10
   } catch (error) {
-    console.error('Impact scoring error:', error)
-    return 5 // Default to medium impact
+    console.error("Impact scoring error:", error);
+    return 5; // Default to medium impact
+  }
+}
+
+/**
+ * Generate a comprehensive performance review based on user data and work entries
+ */
+export async function generatePerformanceReview(
+  user: any,
+  workEntries: any[],
+): Promise<string> {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    // Prepare work entries summary
+    const workSummary = workEntries
+      .map(
+        (entry) =>
+          `- ${entry.title}: ${entry.description} (Impact Score: ${entry.impactScore}/10)`,
+      )
+      .join("\n");
+
+    const prompt = `Generate a comprehensive performance review for ${user.name || "the employee"} based on their work entries.
+
+User Information:
+- Name: ${user.name || "Not provided"}
+- Email: ${user.email || "Not provided"}
+- Job Title: ${user.jobTitle || "Not provided"}
+- Job Description: ${user.jobDescription || "Not provided"}
+
+Work Entries (${workEntries.length} total):
+${workSummary}
+
+Please generate a professional performance review that includes:
+
+1. **Executive Summary**: A brief overview of overall performance
+2. **Key Achievements**: Highlight the most significant accomplishments
+3. **Impact Analysis**: Analyze the business impact of their work
+4. **Growth Areas**: Identify areas for improvement and development
+5. **Future Recommendations**: Suggest goals and focus areas for the next period
+
+Make the review:
+- Professional and constructive
+- Data-driven based on the work entries provided
+- Balanced with both strengths and areas for growth
+- Actionable with specific recommendations
+- Appropriate for a formal performance review process
+
+Format the review in clear sections with proper headings.`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const review = response.text();
+
+    if (!review) throw new Error("No review generated");
+
+    return review;
+  } catch (error) {
+    console.error("Performance review generation error:", error);
+    throw new Error("Failed to generate performance review");
   }
 }
