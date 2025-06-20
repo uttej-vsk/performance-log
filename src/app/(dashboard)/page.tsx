@@ -1,27 +1,26 @@
 import { requireAuth } from '@/lib/auth-utils'
-import Link from 'next/link'
+import QuickActions from '@/components/dashboard/QuickActions'
+import RecentActivity from '@/components/dashboard/RecentActivity'
+import PerformanceSummary from '@/components/dashboard/PerformanceSummary'
 
 export default async function DashboardPage() {
   await requireAuth()
   
   return (
-    <div className="flex-1 flex flex-col items-center justify-center h-full text-center p-8">
-      <h1 className="text-4xl font-semibold text-gray-200">Welcome to your Dashboard</h1>
-      <p className="text-gray-500 mt-2 mb-8">What would you like to do today?</p>
-      <div className="flex gap-4">
-        <Link 
-          href="/chat" 
-          className="bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition font-semibold"
-        >
-          Start a New Chat
-        </Link>
-        <Link 
-          href="/timeline" 
-          className="bg-gray-700 text-white py-3 px-6 rounded-lg hover:bg-gray-600 transition font-semibold"
-        >
-          View Work Timeline
-        </Link>
+    <div className="flex-1 p-6 md:p-8">
+      <h1 className="text-3xl font-bold text-gray-100 mb-6">Dashboard</h1>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1">
+          <QuickActions />
+        </div>
+        <div className="lg:col-span-1">
+          <RecentActivity />
+        </div>
+        <div className="lg:col-span-1">
+          <PerformanceSummary />
+        </div>
       </div>
+      {/* More dashboard components can be added here */}
     </div>
   )
 }
