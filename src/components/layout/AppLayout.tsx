@@ -2,11 +2,18 @@
 
 import { usePathname } from "next/navigation";
 import Sidebar from "@/components/layout/Sidebar";
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const showSidebar = pathname !== "/signin";
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Show sidebar logic - avoid hydration mismatch
+  const showSidebar = mounted ? pathname !== "/signin" : false;
 
   return (
     <div className="flex h-screen bg-background">
