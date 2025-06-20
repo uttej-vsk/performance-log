@@ -3,6 +3,14 @@
 import { useState, useEffect } from 'react'
 import WorkEntryCard from '@/components/dashboard/WorkEntryCard'
 import { Search, Filter, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 
 interface WorkEntryTag {
   tag: {
@@ -139,10 +147,10 @@ export default function TimelinePage() {
     <div className="flex-1 p-6">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-100 mb-2">Work Timeline</h1>
-        <p className="text-gray-400">
+        <CardTitle>Work Timeline</CardTitle>
+        <CardDescription>
           View and manage all your work entries and contributions
-        </p>
+        </CardDescription>
       </div>
 
       {/* Filters and Search */}

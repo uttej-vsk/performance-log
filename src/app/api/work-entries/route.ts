@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: session.user.id,
         title: analysis.title,
-        description: conversationText, // Store the full conversation text
+        description: analysis.description,
         impact: analysis.businessImpact,
         complexity: analysis.technicalComplexity,
         impactScore: analysis.impactScore,

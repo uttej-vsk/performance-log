@@ -125,8 +125,9 @@ export async function analyzeWorkEntry(content: string) {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const prompt = `Analyze the following work entry and extract structured information. Return ONLY a valid JSON object with the following schema:
     {
-      "title": "Brief title of the work item",
-      "businessImpact": "Detailed description of the business impact and value created",
+      "title": "Brief, concise title for the work item (e.g., 'Resolved Authentication Bug')",
+      "description": "A concise, one-paragraph summary of the work performed. This should be a neutral, factual description of the task.",
+      "businessImpact": "Detailed description of the business impact and value created. Explain WHY this work was important.",
       "technicalComplexity": "A number from 1 (low) to 5 (high) representing the technical difficulty",
       "suggestedTags": ["relevant", "keywords"],
       "missingInformation": ["What metrics are missing?", "What context is needed?"],

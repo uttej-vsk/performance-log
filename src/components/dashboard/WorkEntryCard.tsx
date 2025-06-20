@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { Calendar, Tag, TrendingUp, Edit, Trash2, Eye } from 'lucide-react'
+import { Card, CardTitle, CardDescription } from '@/components/ui/card'
 
 interface WorkEntryTag {
   tag: {
@@ -65,13 +66,13 @@ export default function WorkEntryCard({
   }
 
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 hover:border-gray-600 transition-colors">
+    <Card className="bg-gray-800 border border-gray-700 rounded-lg p-6 hover:border-gray-600 transition-colors">
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-100 mb-2">
+          <CardTitle className="text-lg font-semibold text-gray-100 mb-2">
             {workEntry.title}
-          </h3>
+          </CardTitle>
           <div className="flex items-center gap-4 text-sm text-gray-400">
             <div className="flex items-center gap-1">
               <Calendar className="w-4 h-4" />
@@ -140,14 +141,15 @@ export default function WorkEntryCard({
 
       {/* Description */}
       <div className="mb-4">
-        <p className="text-gray-300 text-sm leading-relaxed">
+        <h4 className="text-sm font-medium text-gray-200 mb-1">Description</h4>
+        <CardDescription className="text-gray-300 text-sm leading-relaxed">
           {isExpanded 
             ? workEntry.description 
             : workEntry.description.length > 200 
               ? `${workEntry.description.substring(0, 200)}...` 
               : workEntry.description
           }
-        </p>
+        </CardDescription>
         {workEntry.description.length > 200 && (
           <button
             onClick={() => setIsExpanded(!isExpanded)}
@@ -162,9 +164,9 @@ export default function WorkEntryCard({
       {workEntry.impact && (
         <div className="bg-gray-700 rounded-md p-3">
           <h4 className="text-sm font-medium text-gray-200 mb-1">Business Impact</h4>
-          <p className="text-sm text-gray-300">{workEntry.impact}</p>
+          <CardDescription className="text-sm text-gray-300">{workEntry.impact}</CardDescription>
         </div>
       )}
-    </div>
+    </Card>
   )
 } 
