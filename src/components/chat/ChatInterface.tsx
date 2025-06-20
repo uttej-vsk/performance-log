@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useRef, useEffect } from 'react'
-import MessageList from './MessageList'
-import MessageInput from './MessageInput'
-import { Plus, CheckSquare } from 'lucide-react'
+import { useState, useRef } from 'react'
+import MessageList from '@/components/chat/MessageList'
+import MessageInput from '@/components/chat/MessageInput'
+import { CheckSquare } from 'lucide-react'
 
 // Define the message type
 interface Message {
@@ -17,132 +17,97 @@ export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [currentAssistantMessage, setCurrentAssistantMessage] = useState('');
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Helper function to render the empty state
+  const renderEmptyState = () => (
+    <div className="flex flex-col items-center justify-center h-full text-center">
+      <h1 className="text-4xl font-bold text-gray-300">Performance Tracker</h1>
+      <p className="text-lg text-gray-500 mt-2">What's on your mind today?</p>
+      <p className="text-sm text-gray-600 mt-1">Tell me about your work and I'll help you document it effectively.</p>
+    </div>
+  );
 
   const handleSendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return;
 
-    // Add user message to state
     const userMessage: Message = { 
       id: Date.now().toString(), 
       content, 
       type: 'user',
       timestamp: new Date()
     };
-    setMessages(prev => [...prev, userMessage]);
-
-    // Start loading state
+    
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setIsLoading(true);
-    setCurrentAssistantMessage('');
-
-    // Cancel any ongoing request
+    
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-
-    // Create new abort controller for this request
     abortControllerRef.current = new AbortController();
 
     try {
-      // Prepare messages for AI (excluding the current assistant message)
-      const messagesForAI = messages.map(msg => ({
+      const messagesForAI = newMessages.map(msg => ({
         role: msg.type as 'user' | 'assistant',
         content: msg.content,
       }));
 
-      // Add the current user message
-      messagesForAI.push({
-        role: 'user',
-        content,
-      });
-
-      // Call the streaming API
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: messagesForAI,
-          conversationId,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: messagesForAI, conversationId }),
         signal: abortControllerRef.current.signal,
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to get AI response');
-      }
-
-      // Handle streaming response
+      if (!response.ok) throw new Error('Failed to get AI response');
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No response body');
 
       let assistantMessageId = (Date.now() + 1).toString();
       let fullContent = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        // Decode the chunk
-        const chunk = new TextDecoder().decode(value);
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') {
-              // Streaming complete
-              const finalMessage: Message = {
-                id: assistantMessageId,
-                content: fullContent,
-                type: 'assistant',
-                timestamp: new Date(),
-              };
-              setMessages(prev => [...prev, finalMessage]);
-              setCurrentAssistantMessage('');
-              break;
-            }
-
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.content) {
-                fullContent += parsed.content;
-                setCurrentAssistantMessage(fullContent);
-              }
-            } catch (e) {
-              // Ignore parsing errors for partial chunks
-            }
-          }
-        }
-      }
-
-      // Store messages in database
-      await storeMessages(userMessage, {
+      
+      const assistantMessage: Message = {
         id: assistantMessageId,
-        content: fullContent,
-        type: 'assistant' as const,
-        timestamp: new Date(),
-      });
-
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        // Request was cancelled, don't show error
-        return;
-      }
-      
-      console.error('Chat error:', error);
-      
-      // Add error message
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: '',
         type: 'assistant',
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, errorMessage]);
+      
+      setMessages(prev => [...prev, assistantMessage]);
+
+      const processStream = async () => {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          fullContent += new TextDecoder().decode(value);
+          setMessages(prev => prev.map(msg => 
+            msg.id === assistantMessageId ? { ...msg, content: fullContent } : msg
+          ));
+        }
+      };
+      await processStream();
+
+      const finalAssistantMessage = { ...assistantMessage, content: fullContent };
+      
+      // Update the message list with the final assistant message
+      setMessages(prev => prev.map(msg => 
+        msg.id === assistantMessageId ? finalAssistantMessage : msg
+      ));
+      
+      await storeMessages(userMessage, finalAssistantMessage);
+
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.error('Chat error:', error);
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          content: 'Sorry, I encountered an error. Please try again.',
+          type: 'assistant',
+          timestamp: new Date(),
+        }]);
+      }
     } finally {
       setIsLoading(false);
       abortControllerRef.current = null;
@@ -151,36 +116,34 @@ export default function ChatInterface() {
 
   const storeMessages = async (userMessage: Message, assistantMessage: Message) => {
     try {
-      // Store user message
-      const userResponse = await fetch('/api/chat/messages', {
+      // First, store the user message and get the conversation ID
+      const res = await fetch('/api/chat/messages', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content: userMessage.content,
           type: 'user',
-          conversationId,
+          conversationId, // This can be null for the first message
         }),
       });
+      
+      if (!res.ok) throw new Error('Failed to save user message.');
 
-      if (userResponse.ok) {
-        const userData = await userResponse.json();
-        if (!conversationId) {
-          setConversationId(userData.data.conversation.id);
-        }
+      const { data } = await res.json();
+      const newConversationId = data.conversation.id;
+      
+      if (!conversationId) {
+        setConversationId(newConversationId);
       }
 
-      // Store assistant message
+      // Then, store the assistant message with the correct conversation ID
       await fetch('/api/chat/messages', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content: assistantMessage.content,
           type: 'assistant',
-          conversationId: conversationId || undefined,
+          conversationId: newConversationId,
         }),
       });
     } catch (error) {
@@ -191,94 +154,53 @@ export default function ChatInterface() {
   const startNewConversation = () => {
     setMessages([]);
     setConversationId(null);
-    setCurrentAssistantMessage('');
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    if (abortControllerRef.current) abortControllerRef.current.abort();
   };
 
   const handleSaveEntry = async () => {
-    if (messages.length === 0) return;
+    if (isSaving || !conversationId || messages.length === 0) return;
     setIsSaving(true);
     try {
-      const conversationText = messages.map(m => `${m.type === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n\n');
-      
-      const response = await fetch('/api/work-entries', {
+      const conversationText = messages.map(m => `${m.type}: ${m.content}`).join('\n');
+      await fetch('/api/work-entries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          conversationText,
-          conversationId: conversationId,
-        }),
+        body: JSON.stringify({ conversationText, conversationId }),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to save work entry.');
-      }
-
-      // Optionally, you could show a success message or clear the chat.
-      // For now, we'll just log it.
-      const result = await response.json();
-      console.log('Work entry saved:', result.data);
-
-      // Maybe start a new conversation after saving?
-      startNewConversation();
-
+      // Optionally, show a success toast/message
     } catch (error) {
-      console.error('Save entry error:', error);
-      // You could show an error toast to the user here
+      console.error("Failed to save work entry:", error);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, []);
-
   return (
-    <div className="flex-1 flex flex-col items-center justify-center h-full p-4 md:p-8">
-      <div className="w-full max-w-4xl h-full flex flex-col">
-        {messages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center">
-            <h1 className="text-4xl font-semibold text-gray-300">Performance Tracker</h1>
-            <p className="text-gray-500 mt-2">What's on your mind today?</p>
-            <p className="text-gray-400 mt-1 text-sm">Tell me about your work and I'll help you document it effectively.</p>
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto pr-4">
-            <MessageList 
-              messages={messages} 
-              currentAssistantMessage={currentAssistantMessage}
-              isLoading={isLoading}
-            />
-          </div>
-        )}
-        <div className="mt-auto">
+    <div className="flex flex-col h-full bg-background text-foreground">
+      <div className="flex-1 overflow-y-auto p-4">
+        {messages.length === 0 ? renderEmptyState() : <MessageList messages={messages} />}
+      </div>
+      <div className="p-4 bg-gray-900 border-t border-gray-700">
+        <div className="max-w-3xl mx-auto">
           <div className="flex items-center justify-between mb-2">
-            <button 
+            <button
               onClick={startNewConversation}
-              className="text-sm text-gray-500 hover:text-gray-300"
+              className="text-sm text-gray-400 hover:text-white"
             >
               New Conversation
             </button>
             <button
               onClick={handleSaveEntry}
-              disabled={isSaving || messages.length === 0}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-600 disabled:opacity-70 transition-colors"
+              disabled={isSaving || !conversationId || messages.length === 0}
+              className="flex items-center gap-2 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg transition-colors"
             >
-              <CheckSquare size={16} />
-              {isSaving ? 'Saving...' : 'Save as Work Entry'}
+              <CheckSquare className="w-4 h-4" />
+              <span>{isSaving ? 'Saving...' : 'Save as Work Entry'}</span>
             </button>
           </div>
-          <MessageInput onSend={handleSendMessage} isLoading={isLoading} />
+          <MessageInput onSendMessage={handleSendMessage} isLoading={isLoading} />
         </div>
       </div>
     </div>
-  )
-} 
+  );
+}

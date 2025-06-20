@@ -1,22 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
-import SessionProvider from "@/components/providers/SessionProvider";
 import AppLayout from "@/components/layout/AppLayout";
+import Provider from "@/components/providers/SessionProvider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Performance Tracker",
-  description: "AI-powered performance tracking and review generation",
+  description: "Track your performance and get insights.",
 };
 
 export default function RootLayout({
@@ -25,15 +17,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <SessionProvider>
-          <AppLayout>
-            {children}
-          </AppLayout>
-        </SessionProvider>
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body className={inter.className}>
+        <Provider>
+          <AppLayout>{children}</AppLayout>
+        </Provider>
       </body>
     </html>
   );

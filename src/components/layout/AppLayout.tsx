@@ -9,9 +9,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const showSidebar = pathname !== '/signin'
 
   return (
-    <div className="flex h-screen bg-background text-foreground">
+    <div className="flex h-screen bg-background">
       {showSidebar && <Sidebar />}
-      <main className="flex-1 flex flex-col overflow-y-auto">
+      <main className="flex-1 overflow-y-auto bg-black text-white">
         {children}
       </main>
     </div>

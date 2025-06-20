@@ -1,47 +1,57 @@
-import { useState } from 'react'
-import { ArrowUp } from 'lucide-react'
+"use client"
+
+import { useState, useRef, useEffect } from 'react'
+import { ArrowUp, CornerDownLeft } from 'lucide-react'
 
 interface MessageInputProps {
-  onSend: (content: string) => void;
-  isLoading?: boolean;
+  onSendMessage: (message: string) => void
+  isLoading: boolean
 }
 
-export default function MessageInput({ onSend, isLoading }: MessageInputProps) {
-  const [value, setValue] = useState('')
+export default function MessageInput({ onSendMessage, isLoading }: MessageInputProps) {
+  const [message, setMessage] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  function handleSend(e: React.FormEvent) {
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [message])
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (value.trim() && !isLoading) {
-      onSend(value)
-      setValue('')
+    if (message.trim() && !isLoading) {
+      onSendMessage(message)
+      setMessage('')
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSubmit(e as any)
     }
   }
 
   return (
-    <form
-      onSubmit={handleSend}
-      className="bg-gray-800/80 border border-gray-700 rounded-2xl p-2 flex items-center w-full"
-    >
+    <form onSubmit={handleSubmit} className="relative">
       <textarea
-        value={value}
-        onChange={e => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSend(e);
-          }
-        }}
-        className="flex-1 bg-transparent text-gray-200 placeholder-gray-500 focus:outline-none resize-none px-3 py-2 disabled:opacity-50"
-        placeholder={isLoading ? "AI is thinking..." : "Ask anything..."}
+        ref={textareaRef}
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Ask anything..."
         rows={1}
+        className="w-full resize-none bg-gray-700 text-gray-200 placeholder-gray-400 rounded-lg py-3 pl-4 pr-20 focus:outline-none focus:ring-2 focus:ring-blue-500"
         disabled={isLoading}
       />
       <button
         type="submit"
-        className="bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 transition-colors text-white rounded-lg p-2"
-        disabled={!value.trim() || isLoading}
+        disabled={isLoading || !message.trim()}
+        className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:opacity-70 rounded-full flex items-center justify-center transition-colors"
       >
-        <ArrowUp className="h-5 w-5" />
+        <ArrowUp className="w-5 h-5 text-white" />
       </button>
     </form>
   )

@@ -1,4 +1,4 @@
-import { User, Bot } from 'lucide-react'
+import { MessageSquare } from 'lucide-react'
 
 interface Message {
   id: string;
@@ -9,45 +9,32 @@ interface Message {
 
 interface MessageListProps {
   messages: Message[];
-  currentAssistantMessage?: string;
-  isLoading?: boolean;
 }
 
-export default function MessageList({ messages, currentAssistantMessage, isLoading }: MessageListProps) {
+export default function MessageList({ messages }: MessageListProps) {
   return (
-    <div className="space-y-6">
-      {messages.map((msg) => (
+    <div className="space-y-4">
+      {messages.map((msg, index) => (
         <div
-          key={msg.id}
-          className={`flex items-start gap-4`}
+          key={msg.id || index}
+          className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
         >
-          <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${msg.type === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
-            {msg.type === 'user' ? <User className="w-5 h-5 text-white" /> : <Bot className="w-5 h-5 text-white" />}
-          </div>
-          <div className="flex-1">
-            <p className="text-gray-200 whitespace-pre-wrap">
-              {msg.content}
-            </p>
-            {msg.timestamp && (
-              <p className="text-xs text-gray-500 mt-1">
-                {msg.timestamp.toLocaleTimeString()}
-              </p>
-            )}
+          <div
+            className={`max-w-xl px-4 py-2 rounded-lg ${
+              msg.type === 'user'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-200'
+            }`}
+          >
+            <p className="whitespace-pre-wrap">{msg.content}</p>
           </div>
         </div>
       ))}
-      
-      {/* Show streaming message */}
-      {isLoading && currentAssistantMessage && (
-        <div className="flex items-start gap-4">
-          <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gray-700">
-            <Bot className="w-5 h-5 text-white" />
-          </div>
-          <div className="flex-1">
-            <p className="text-gray-200 whitespace-pre-wrap">
-              {currentAssistantMessage}
-              <span className="animate-pulse">▋</span>
-            </p>
+      {messages.length > 0 && messages[messages.length-1].type === 'user' && (
+        <div className="flex justify-start">
+          <div className="max-w-xl px-4 py-2 rounded-lg bg-gray-700 text-gray-200 animate-pulse">
+            <MessageSquare className="w-5 h-5 inline-block mr-2" />
+            Thinking...
           </div>
         </div>
       )}
