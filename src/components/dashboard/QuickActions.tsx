@@ -12,7 +12,7 @@ export default function QuickActions() {
           <PlusCircle className="w-5 h-5" />
           <span>Start New Chat</span>
         </Link>
-        <Link href="/timeline" className="flex items-center gap-3 w-full text-left bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors">
+        <Link href="/dashboard/timeline" className="flex items-center gap-3 w-full text-left bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors">
           <List className="w-5 h-5" />
           <span>View Timeline</span>
         </Link>
