@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { readFile, unlink } from 'fs/promises';
-import { fileToGenerativePart } from '@/lib/utils';
+import { fileToGenerativePart } from '@/lib/file-utils';
 
 // Initialize Gemini client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
@@ -29,7 +29,10 @@ export type Message = z.infer<typeof MessageSchema>;
 export type Conversation = z.infer<typeof ConversationSchema>;
 
 // System prompt for the performance tracking AI
-const getSystemPrompt = (userProfile?: { jobTitle?: string | null; jobDescription?: string | null; projects?: string | null; }) => {
+const getSystemPrompt = (
+  userProfile?: { jobTitle?: string | null; jobDescription?: string | null; projects?: string | null; },
+  jiraContext?: string
+) => {
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -48,7 +51,7 @@ const getSystemPrompt = (userProfile?: { jobTitle?: string | null; jobDescriptio
 Your main goal is to help them document and analyze their work contributions for their performance review.`
   }
 
-  return `${profileContext} Today is ${today}.
+  let systemPrompt = `${profileContext} Today is ${today}.
 
 Your role is to:
 1.  Act like a supportive colleague who genuinely cares about their professional growth.
@@ -67,6 +70,17 @@ Key guidelines:
 - Keep responses concise but insightful.
 
 Remember: You're helping users tell their professional story better. Every interaction should feel natural and valuable.`;
+
+  // Add JIRA context if available
+  if (jiraContext) {
+    systemPrompt += `\n\nJIRA Context Available:\n${jiraContext}\n\nAdditional Instructions:
+- If JIRA tickets are mentioned, use that context to ask intelligent follow-up questions
+- Focus on business impact, user value, and measurable outcomes
+- Help users articulate the value of their work for performance reviews
+- Reference specific details from the JIRA tickets when asking questions`;
+  }
+
+  return systemPrompt;
 };
 
 /**
@@ -76,6 +90,7 @@ export async function generateStreamingResponse(
   messages: Message[],
   userId: string,
   conversationId?: string,
+  jiraContext?: string,
 ): Promise<ReadableStream<Uint8Array>> {
   try {
     // Fetch user profile
@@ -87,11 +102,11 @@ export async function generateStreamingResponse(
     // Validate input
     const validatedMessages = messages.map((msg) => MessageSchema.parse(msg));
 
-    const systemPrompt = getSystemPrompt(userProfile ?? undefined);
+    const systemPrompt = getSystemPrompt(userProfile ?? undefined, jiraContext);
 
     // Convert messages to Gemini format, including image data from file path
     const contents = await Promise.all(validatedMessages.map(async (msg) => {
-      const parts = [{ text: msg.content }];
+      const parts: any[] = [{ text: msg.content }];
       let tempFilePath: string | undefined = undefined;
 
       if (msg.filePath) {

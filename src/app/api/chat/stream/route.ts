@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { generateStreamingResponse, Message } from '@/lib/ai'
 import { z } from 'zod'
+import { JiraClient, RateLimitError } from '@/lib/jira/client'
+import { JiraContextBuilder } from '@/lib/jira/context-builder'
 
 // Request schema for chat streaming
 const StreamRequestSchema = z.object({
@@ -31,6 +33,35 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'No messages provided' }, { status: 400 })
     }
 
+    // ADD: Detect JIRA tickets in the ENTIRE conversation history
+    const contextBuilder = new JiraContextBuilder()
+    const allUserContent = messages.filter(m => m.role === 'user').map(m => m.content).join('\\n');
+    const ticketKeys = contextBuilder.detectTicketMentions(allUserContent);
+    let jiraContext = ""
+    
+    if (ticketKeys.length > 0) {
+      try {
+        const jiraClient = await JiraClient.createForUser(session.user.id)
+        
+        if (jiraClient) {
+          const tickets = await jiraClient.getMultipleTickets(ticketKeys)
+          if (tickets.length > 0) {
+            const contexts = await Promise.all(
+              tickets.map(ticket => contextBuilder.buildTicketContext(ticket))
+            )
+            jiraContext = contexts.join('\\n\\n')
+          }
+        }
+      } catch (error) {
+        if (error instanceof RateLimitError) {
+          jiraContext = "⚠️ JIRA rate limit reached. Continuing without ticket context."
+        } else {
+          console.error('JIRA context error:', error)
+          jiraContext = "⚠️ Unable to fetch JIRA ticket details. Continuing without context."
+        }
+      }
+    }
+
     // Convert messages to the format expected by the AI service
     const aiMessages: Message[] = messages.map(msg => ({
       role: msg.role,
@@ -38,11 +69,12 @@ export async function POST(request: NextRequest) {
       filePath: msg.filePath,
     }))
 
-    // Generate streaming response
+    // Generate streaming response with JIRA context
     const stream = await generateStreamingResponse(
       aiMessages,
       session.user.id,
       conversationId || undefined,
+      jiraContext, // Pass JIRA context to the AI service
     )
 
     // Return streaming response
