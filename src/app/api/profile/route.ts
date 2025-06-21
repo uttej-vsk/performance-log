@@ -47,22 +47,46 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: {
-        name: true,
-        email: true,
-        jobTitle: true,
-        jobDescription: true,
-        projects: true,
-      },
     });
 
     if (!user) {
       return Response.json({ error: 'User not found' }, { status: 404 });
     }
 
-    return Response.json({ success: true, data: user });
+    // We only return fields that are safe to expose to the client
+    const { password, jiraAccessToken, jiraRefreshToken, ...safeUser } = user;
+
+    return Response.json({ success: true, data: safeUser });
   } catch (error) {
     console.error('Failed to fetch profile:', error);
     return Response.json({ error: 'Failed to fetch profile' }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE handler to disconnect JIRA for the user.
+ */
+export async function DELETE() {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: {
+        jiraCloudId: null,
+        jiraAccessToken: null,
+        jiraRefreshToken: null,
+        jiraTokenExpiry: null,
+        jiraConnectedAt: null,
+      },
+    });
+
+    return Response.json({ success: true, message: 'JIRA connection removed.' });
+  } catch (error) {
+    console.error('Failed to disconnect JIRA:', error);
+    return Response.json({ error: 'Failed to disconnect JIRA' }, { status: 500 });
   }
 } 
