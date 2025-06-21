@@ -3,46 +3,29 @@
 import { useState, useEffect } from 'react';
 import { Search, MessageSquare, Plus, Trash2, Clock } from 'lucide-react';
 import { format } from 'date-fns';
-import { useConversations } from '@/hooks/useConversations';
+import { Conversation } from '@/types';
 
 interface ConversationSidebarProps {
   onSelectConversation: (conversationId: string) => void;
   onNewConversation: () => void;
   currentConversationId: string | null;
+  conversations: Conversation[];
+  isLoading: boolean;
 }
 
 export default function ConversationSidebar({
   onSelectConversation,
   onNewConversation,
   currentConversationId,
+  conversations,
+  isLoading,
 }: ConversationSidebarProps) {
   const [search, setSearch] = useState('');
-  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
-  
-  const {
-    conversations,
-    loading,
-    error,
-    fetchConversations,
-    deleteConversation,
-  } = useConversations();
-
-  useEffect(() => {
-    // Debounce search
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-
-    const timeout = setTimeout(() => {
-      fetchConversations(search);
-    }, 300);
-
-    setSearchTimeout(timeout);
-
-    return () => {
-      if (timeout) clearTimeout(timeout);
-    };
-  }, [search, fetchConversations]);
+  const [error] = useState<string | null>(null);
+  const deleteConversation = async (id: string): Promise<boolean> => {
+    // Placeholder delete; backend integration can be added
+    return false;
+  };
 
   const handleDeleteConversation = async (conversationId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -103,7 +86,7 @@ export default function ConversationSidebar({
 
       {/* Conversations List */}
       <div className="flex-1 overflow-y-auto">
-        {loading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center h-32">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
           </div>
@@ -148,9 +131,9 @@ export default function ConversationSidebar({
                     </p>
                     <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
                       <Clock className="w-3 h-3" />
-                      <span>{format(new Date(conversation.updatedAt), 'MMM dd, HH:mm')}</span>
+                      <span>{format(new Date(conversation.updatedAt ?? conversation.createdAt), 'MMM dd, HH:mm')}</span>
                       <span>•</span>
-                      <span>{conversation.messageCount} messages</span>
+                      {conversation.messageCount && <span>{conversation.messageCount} messages</span>}
                     </div>
                   </div>
                   <button

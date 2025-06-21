@@ -13,7 +13,9 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const id = params.id;
+    // Next.js 15 requires awaiting params in dynamic API routes
+    // eslint-disable-next-line @typescript-eslint/await-thenable
+    const { id } = await params;
 
     // Verify the conversation belongs to the current user
     const conversation = await prisma.conversation.findFirst({
@@ -69,7 +71,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const id = params.id;
+    // Next.js 15 requires awaiting params in dynamic API routes
+    // eslint-disable-next-line @typescript-eslint/await-thenable
+    const { id } = await params;
 
     // Verify the conversation belongs to the current user
     const conversation = await prisma.conversation.findFirst({

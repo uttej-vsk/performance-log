@@ -1,32 +1,31 @@
 "use client"
 
 import { useState, useEffect, useRef } from 'react'
-import MessageList from '@/components/chat/MessageList'
 import MessageInput from '@/components/chat/MessageInput'
-import { CheckSquare } from 'lucide-react'
 import ConversationSidebar from './ConversationSidebar'
-import { useConversations } from '@/hooks/useConversations'
-
-// Define the message type
-interface Message {
-  id: string;
-  content: string;
-  type: 'user' | 'assistant';
-  timestamp?: Date;
-  imageUrl?: string;
-}
+import { useConversations, loadConversation } from '@/hooks/useConversations'
+import { ChatMessage as ChatMessageRenderer } from './ChatMessage'
+import { useSession } from 'next-auth/react'
+import { Button } from '@/components/ui/button'
+import { Message as BaseMessage, Conversation } from '@/types'
 
 export default function ChatInterface() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<BaseMessage[]>([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const eventSourceRef = useRef<EventSource | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const abortControllerRef = useRef<AbortController>(new AbortController());
-
-  const { loadConversation, refreshConversations } = useConversations();
+  const { data: session } = useSession();
+  const { 
+    data: conversations = [], 
+    refetch: refetchConversations, 
+    isLoading: conversationsLoading 
+  } = useConversations();
+  const currentConversation = conversations.find((c: Conversation) => c.id === currentConversationId);
 
   // Load conversation from URL on mount
   useEffect(() => {
@@ -40,19 +39,35 @@ export default function ChatInterface() {
   // Update URL when conversation changes
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (conversationId) {
-      url.searchParams.set('conversation', conversationId);
+    if (currentConversationId) {
+      url.searchParams.set('conversation', currentConversationId);
     } else {
       url.searchParams.delete('conversation');
     }
     window.history.replaceState({}, '', url.toString());
-  }, [conversationId]);
+  }, [currentConversationId]);
+
+  // When currentConversationId changes, load its messages
+  useEffect(() => {
+    const loadMessages = async () => {
+      if (currentConversationId) {
+        setIsLoadingMessages(true);
+        const data = await loadConversation(currentConversationId);
+        const loaded = data ? data.messages.map(m => ({ role: m.type as 'user' | 'assistant', content: m.content })) : [];
+        setMessages(loaded);
+        setIsLoadingMessages(false);
+      } else {
+        setMessages([]);
+      }
+    };
+    loadMessages();
+  }, [currentConversationId]);
 
   const handleLoadConversation = async (convId: string) => {
     const data = await loadConversation(convId);
     if (data) {
-      setMessages(data.messages);
-      setConversationId(data.conversation.id);
+      setMessages(data.messages.map(m => ({ role: m.type as 'user' | 'assistant', content: m.content })));
+      setCurrentConversationId(data.conversation.id);
     }
   };
 
@@ -66,9 +81,9 @@ export default function ChatInterface() {
   );
 
   // Auto-save when conversation reaches certain criteria
-  const shouldAutoSave = (messages: Message[]) => {
+  const shouldAutoSave = (messages: BaseMessage[]) => {
     // Auto-save if we have at least 4 messages (2 exchanges) and the last message is from AI
-    if (messages.length >= 4 && messages[messages.length - 1].type === 'assistant') {
+    if (messages.length >= 4 && messages[messages.length - 1].role === 'assistant') {
       const lastMessage = messages[messages.length - 1].content.toLowerCase();
       // Check if the AI is suggesting the conversation is complete
       const completionKeywords = [
@@ -88,8 +103,9 @@ export default function ChatInterface() {
   const JIRA_URL_REGEX = /https?:\/\/[a-zA-Z0-9\.-]+\/browse\/[A-Z]+-\d+/;
 
   const handleSendMessage = async (content: string, file?: File) => {
-    if ((!content.trim() && !file) || isLoading) return;
-
+    if (isSendingMessage) return;
+    
+    setIsSendingMessage(true);
     let tempFilePath: string | undefined = undefined;
     if (file) {
       try {
@@ -108,22 +124,15 @@ export default function ChatInterface() {
       } catch (error) {
         console.error('File upload error:', error);
         // Handle error (e.g., show a toast to the user)
+        setIsSendingMessage(false);
         return;
       }
     }
 
-    const userMessage: Message = { 
-      id: Date.now().toString(), 
-      content, 
-      type: 'user',
-      timestamp: new Date(),
-      // We'll use the local file preview for the UI, not the server path
-      imageUrl: file ? URL.createObjectURL(file) : undefined,
-    };
+    const userMessage: BaseMessage = { role: 'user', content };
     
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
-    setIsLoading(true);
 
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -131,16 +140,16 @@ export default function ChatInterface() {
     
     try {
       const messagesForAI = newMessages.map(msg => ({
-        role: msg.type as 'user' | 'assistant',
+        role: msg.role as 'user' | 'assistant',
         content: msg.content,
         // We only need to send the temp path for the latest user message
-        filePath: msg.id === userMessage.id ? tempFilePath : undefined,
+        filePath: msg.role === 'user' ? tempFilePath : undefined,
       }));
 
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: messagesForAI, conversationId }),
+        body: JSON.stringify({ messages: messagesForAI, conversationId: currentConversationId }),
         signal: abortControllerRef.current.signal,
       });
 
@@ -151,11 +160,9 @@ export default function ChatInterface() {
       let assistantMessageId = (Date.now() + 1).toString();
       let fullContent = '';
       
-      const assistantMessage: Message = {
-        id: assistantMessageId,
+      const assistantMessage: BaseMessage = {
+        role: 'assistant',
         content: '',
-        type: 'assistant',
-        timestamp: new Date(),
       };
       
       setMessages(prev => [...prev, assistantMessage]);
@@ -165,18 +172,18 @@ export default function ChatInterface() {
         while (true) {
           const { done, value } = await reader.read();
           if (done) {
-            setIsLoading(false);
+            setIsSendingMessage(false);
             break;
           }
           fullContent += decoder.decode(value, { stream: true });
           setMessages(prev => prev.map(msg => 
-            msg.id === assistantMessageId ? { ...msg, content: fullContent } : msg
+            msg.role === 'assistant' ? { ...msg, content: fullContent } : msg
           ));
         }
       };
       await processStream();
 
-      const finalAssistantMessage = { ...assistantMessage, content: fullContent };
+      const finalAssistantMessage: BaseMessage = { ...assistantMessage, content: fullContent };
       
       const updatedMessages = [...newMessages, finalAssistantMessage];
       setMessages(updatedMessages);
@@ -189,17 +196,15 @@ export default function ChatInterface() {
 
     } catch (error) {
       console.error('Chat error:', error);
-      setIsLoading(false);
+      setIsSendingMessage(false);
       setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
+        role: 'assistant',
         content: 'Sorry, I encountered an error. Please try again.',
-        type: 'assistant',
-        timestamp: new Date(),
       }]);
     }
   };
 
-  const storeMessages = async (userMessage: Message, assistantMessage: Message) => {
+  const storeMessages = async (userMessage: BaseMessage, assistantMessage: BaseMessage) => {
     try {
       // First, store the user message and get the conversation ID
       const res = await fetch('/api/chat/messages', {
@@ -208,7 +213,7 @@ export default function ChatInterface() {
         body: JSON.stringify({
           content: userMessage.content,
           type: 'user',
-          conversationId, // This can be null for the first message
+          conversationId: currentConversationId, // This can be null for the first message
         }),
       });
       
@@ -217,8 +222,8 @@ export default function ChatInterface() {
       const { data } = await res.json();
       const newConversationId = data.conversation.id;
       
-      if (!conversationId) {
-        setConversationId(newConversationId);
+      if (!currentConversationId) {
+        setCurrentConversationId(newConversationId);
       }
 
       // Then, store the assistant message with the correct conversation ID
@@ -233,34 +238,34 @@ export default function ChatInterface() {
       });
 
       // Refresh the conversations list to show the new conversation
-      refreshConversations();
+      refetchConversations();
     } catch (error) {
       console.error('Failed to store messages:', error);
     }
   };
 
-  const startNewConversation = () => {
+  const handleSelectConversation = (id: string) => {
+    setCurrentConversationId(id);
+  };
+
+  const handleNewConversation = () => {
+    setCurrentConversationId(null);
     setMessages([]);
-    setConversationId(null);
     setSaveStatus('idle');
     if (eventSourceRef.current) eventSourceRef.current.close();
   };
 
-  const handleSelectConversation = (convId: string) => {
-    handleLoadConversation(convId);
-  };
-
   const handleSaveEntry = async (isAutoSave = false) => {
-    if (isSaving || !conversationId || messages.length === 0) return;
+    if (isSaving || !currentConversationId || messages.length === 0) return;
     setIsSaving(true);
     setSaveStatus('saving');
     
     try {
-      const conversationText = messages.map(m => `${m.type}: ${m.content}`).join('\n');
+      const conversationText = messages.map(m => `${m.role}: ${m.content}`).join('\n');
       const response = await fetch('/api/work-entries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationText, conversationId }),
+        body: JSON.stringify({ conversationText, conversationId: currentConversationId }),
       });
       
       if (!response.ok) {
@@ -277,7 +282,7 @@ export default function ChatInterface() {
         if (isAutoSave) {
           // For auto-save, start a new conversation
           setTimeout(() => {
-            startNewConversation();
+            handleNewConversation();
           }, 2000);
         }
       } else {
@@ -314,66 +319,47 @@ export default function ChatInterface() {
   };
 
   return (
-    <div className="flex h-full bg-background text-foreground">
-      {/* Conversation Sidebar */}
-      {showSidebar && (
-        <ConversationSidebar
-          onSelectConversation={handleSelectConversation}
-          onNewConversation={startNewConversation}
-          currentConversationId={conversationId}
-        />
-      )}
-
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-700 bg-gray-900">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setShowSidebar(!showSidebar)}
-                className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-              <h1 className="text-lg font-semibold text-gray-100">
-                {conversationId ? 'Chat' : 'New Conversation'}
-              </h1>
-            </div>
-            <button
-              onClick={startNewConversation}
-              className="text-sm text-gray-400 hover:text-white"
-            >
-              New Conversation
-            </button>
+    <div className="flex h-screen bg-background">
+      <ConversationSidebar 
+        conversations={conversations}
+        currentConversationId={currentConversationId}
+        onSelectConversation={handleSelectConversation}
+        onNewConversation={handleNewConversation}
+        isLoading={conversationsLoading}
+      />
+      <main className="flex-1 flex flex-col">
+        <header className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-xl font-bold">
+            {currentConversation ? currentConversation.title : 'New Conversation'}
+          </h2>
+          <Button
+            variant="outline"
+            onClick={handleNewConversation}
+          >
+            New Conversation
+          </Button>
+        </header>
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-6">
+            {isLoadingMessages ? (
+              <div className="flex items-center justify-center pt-10">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : (
+              messages.map((message, index) => <ChatMessageRenderer key={index} message={message} />)
+            )}
+            {isSendingMessage && (
+               <ChatMessageRenderer message={{ role: 'assistant', content: '...' }} />
+            )}
           </div>
         </div>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {messages.length === 0 ? renderEmptyState() : <MessageList messages={messages} />}
+        <div className="p-4 border-t">
+          <MessageInput
+            onSendMessage={handleSendMessage}
+            isLoading={isSendingMessage}
+          />
         </div>
-
-        {/* Input Area */}
-        <div className="p-4 bg-gray-900 border-t border-gray-700">
-          <div className="max-w-3xl mx-auto">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex-1"></div>
-              <button
-                onClick={() => handleSaveEntry(false)}
-                disabled={isSaving || !conversationId || messages.length === 0}
-                className={getSaveButtonClass()}
-              >
-                <CheckSquare className="w-4 h-4" />
-                <span>{getSaveButtonText()}</span>
-              </button>
-            </div>
-            <MessageInput onSendMessage={handleSendMessage} isLoading={isLoading} />
-          </div>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }
