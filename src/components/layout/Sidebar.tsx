@@ -9,6 +9,7 @@ import {
   Settings,
   LogOut,
   User,
+  Bug,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,11 @@ const mainNavLinks = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/dashboard/timeline", label: "Timeline", icon: Calendar },
+];
+
+const secondaryNavLinks = [
+  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard/jira-test", label: "JIRA Test", icon: Bug },
 ];
 
 export default function Sidebar() {
@@ -59,18 +65,21 @@ export default function Sidebar() {
             </div>
           </div>
         </div>
-        <Link
-          href="/dashboard/settings"
-          className={cn(
-            "flex items-center gap-3 mt-2 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-            pathname === "/dashboard/settings"
-              ? "bg-accent text-accent-foreground"
-              : "text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground",
-          )}
-        >
-          <Settings className="h-5 w-5" />
-          <span>Settings</span>
-        </Link>
+        {secondaryNavLinks.map(({ href, label, icon: Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            className={cn(
+              "flex items-center gap-3 mt-2 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+              pathname === href
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground",
+            )}
+          >
+            <Icon className="h-5 w-5" />
+            <span>{label}</span>
+          </Link>
+        ))}
         <button
           onClick={() => signOut()}
           className="w-full flex items-center gap-3 mt-2 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground transition-colors"
