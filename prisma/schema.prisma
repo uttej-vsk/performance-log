@@ -74,6 +74,13 @@ model User {
   performanceReviews PerformanceReview[]
   userPreferences   UserPreference[]
 
+  // JIRA Integration fields
+  jiraCloudId      String?
+  jiraAccessToken  String? // Encrypted
+  jiraRefreshToken String? // Encrypted
+  jiraTokenExpiry  DateTime?
+  jiraConnectedAt  DateTime?
+
   @@map("users")
 }
 
@@ -84,6 +91,20 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verification_tokens")
+}
+
+// New table for JIRA ticket cache
+model JiraTicketCache {
+  id        String   @id @default(cuid())
+  ticketKey String   @unique
+  data      String // JSON string for SQLite
+  userId    String // Which user's context
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([ticketKey, userId])
+  @@index([expiresAt])
+  @@map("jira_ticket_caches")
 }
 
 // Main application tables
